@@ -58,8 +58,7 @@ URLs.append('https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2020/AIS_2020_02_
 # Information on what AIS information means:
     #https://documentation.spire.com/ais-fundamentals/different-classes-of-ais/ais-channel-access-methods/
 
-# TDL: read from an updateable excel sheet in GitHub
-    
+#Read filters from the excel Sheet "Filters_by_Bridge" in this GitHub Repository    
 excel_filters = pd.read_excel("https://raw.githubusercontent.com/DiranOrange/Key-Bridge-Code-and-Data/main/Filters_by_Bridge.xlsx", header = 0, index_col=0)
 
 dict_filters = excel_filters.transpose().to_dict('list')
@@ -125,10 +124,3 @@ if __name__ == "__main__":
     ### Download and Filter in Parallel ###
     with concurrent.futures.ThreadPoolExecutor() as executor : 
         executor.map(download_and_filter, URLs)
-
-
-
-
-
-
-
