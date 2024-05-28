@@ -1,0 +1,134 @@
+### Last updated by Diran on 5/28/24
+
+import pandas as pd
+
+#Packages for interfacing with internet
+from io import BytesIO
+from zipfile import ZipFile
+from urllib.request import urlopen
+
+#Packages for parallel processing
+import concurrent.futures
+
+
+### Creating All URLs ###
+
+## Best data is from 2015 through 2023 (has the most recent / rigorous data collection standards)
+
+# General URL format: https://coast.noaa.gov/htdata/CMSP/AISDataHandler/Year/AIS_Year_MonthNum_DayNum.zip
+
+# First, construct a list of all the dates in the year as numbers:
+
+days = ['0' + str(i) if i < 10 else str(i) for i in range(1,32)]
+
+January = ['_01_' + i for i in days]
+February = ['_02_' + i for i in days[:28]]
+March = ['_03_' + i for i in days]
+April = ['_04_' + i for i in days[:30]]
+May = ['_05_' + i for i in days]
+June = ['_06_' + i for i in days[:30]]
+July = ['_07_' + i for i in days]
+August = ['_08_' + i for i in days]
+September = ['_09_' + i for i in days[:30]]
+October = ['_10_' + i for i in days]
+November = ['_11_' + i for i in days[:30]]
+December = ['_12_' + i for i in days]
+    #The underlines are to make the date fit into the final url
+    
+months = [January, February, March, April, May, June, July, August, September, November, December]
+
+date_nums = [day for month in months for day in month]
+
+# Next, the beginnning of each URL is the same for 2015 - 2023
+
+base_url = 'https://coast.noaa.gov/htdata/CMSP/AISDataHandler/'
+
+# Combine the date numbers with the general url format to get all URL's:
+
+URLs = [base_url + str(Year) + '/AIS_' + str(Year) + Date + '.zip' for Date in date_nums for Year in range(2015, 2024)]
+
+# Can't forget about leap years!
+URLs.append('https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2016/AIS_2016_02_29.zip')
+URLs.append('https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2020/AIS_2020_02_29.zip')
+
+
+
+### Filters to sift Data with ###
+
+# Information on what AIS information means:
+    #https://documentation.spire.com/ais-fundamentals/different-classes-of-ais/ais-channel-access-methods/
+
+# TDL: read from an updateable excel sheet in GitHub
+    
+excel_filters = pd.read_excel("https://raw.githubusercontent.com/DiranOrange/Key-Bridge-Code-and-Data/main/Filters_by_Bridge.xlsx", header = 0, index_col=0)
+
+dict_filters = excel_filters.transpose().to_dict('list')
+
+filters = {bridge:
+    str(dict_filters[bridge][0]) + ' < LAT < ' + str(dict_filters[bridge][1]) + ' and ' + 
+    str(dict_filters[bridge][2]) + ' < LON < ' + str(dict_filters[bridge][3])
+    for bridge in dict_filters
+    }
+
+
+def filter_file(file, filters):
+    """
+    Parameters
+    ----------
+    file : path to the file the be filtered
+        Zipfiles from the internet will be opened, and the path will be listed here
+    
+    output : path to the file that will contain all the filtered data
+    
+    filters : Filters to sort data, see variable assignmnet outside this function.
+    
+    Returns
+    -------
+    None. Data is saved outside the program, thus nothing needs to be returned
+
+    """
+    
+    #Each file is prepared as a data frame
+    raw_data = pd.read_csv(file, sep=',', header = 0)
+     
+    #Apply each filter via the query function
+    for bridge in filters:
+        filtered_data = raw_data.query(filters[bridge])
+        
+        #Put the data for each bridge into its own csv file
+        filtered_data.to_csv(('D:\Marine Data' + '\\' + bridge + ' Data.csv'), mode = 'a')
+    return
+
+
+### Downloading the Data ###
+
+# Go through each URL, open the file, then apply the filtering function    
+
+def download_and_filter(url):
+    # Download the file from the link so it can be interacted with
+    download = urlopen(url)
+    # Unzip the file
+    data_zip_file = ZipFile(BytesIO(download.read()))
+    
+    #The actual file name is derived from the url, and looks like AIS_Year_DateNum
+    file_name = url[55:-4] + '.csv'
+        #The first 50 characters are the base url, the last 4 are .zip
+    
+    #Apply the filter function to the file, and save it to the output file
+    filter_file(data_zip_file.open(file_name), filters=filters)
+        #TBD: Allow the script to write to a csv file in GitHub
+
+
+#Running the code:
+if __name__ == "__main__":
+        
+    ### Download and Filter in Parallel ###
+    with concurrent.futures.ThreadPoolExecutor() as executor : 
+        executor.map(download_and_filter, URLs)
+
+
+
+
+
+
+
