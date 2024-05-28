@@ -1,4 +1,4 @@
-### Last updated by Diran on 5/28/24
+## Last updated by Diran on 5/28/24
 
 import pandas as pd
 
@@ -52,8 +52,7 @@ URLs.append('https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2016/AIS_2016_02_
 URLs.append('https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2020/AIS_2020_02_29.zip')
 
 
-
-### Filters to sift Data with ###
+### Filtering Data ###
 
 # Information on what AIS information means:
     #https://documentation.spire.com/ais-fundamentals/different-classes-of-ais/ais-channel-access-methods/
@@ -63,6 +62,7 @@ excel_filters = pd.read_excel("https://raw.githubusercontent.com/DiranOrange/Key
 
 dict_filters = excel_filters.transpose().to_dict('list')
 
+#The query function asks for a string which denotes the conditions that each columns must satisfy for a row to be accepted
 filters = {bridge:
     str(dict_filters[bridge][0]) + ' < LAT < ' + str(dict_filters[bridge][1]) + ' and ' + 
     str(dict_filters[bridge][2]) + ' < LON < ' + str(dict_filters[bridge][3])
@@ -77,14 +77,12 @@ def filter_file(file, filters):
     file : path to the file the be filtered
         Zipfiles from the internet will be opened, and the path will be listed here
     
-    output : path to the file that will contain all the filtered data
-    
     filters : Filters to sort data, see variable assignmnet outside this function.
     
     Returns
     -------
     None. Data is saved outside the program, thus nothing needs to be returned
-
+        #In the event that data cannot be written to a non-local csv file, the filtered data will be returned by this function
     """
     
     #Each file is prepared as a data frame
@@ -96,6 +94,9 @@ def filter_file(file, filters):
         
         #Put the data for each bridge into its own csv file
         filtered_data.to_csv(('D:\Marine Data' + '\\' + bridge + ' Data.csv'), mode = 'a')
+            #WARNING: This filepath is temporary due to it being local, and will cause issues if not changed after downloading
+            #TDL: Allow the script to write to a non-local data hosting website, likely this GitHub Repository
+                #Note: may be difficult due to the size of the data being handled / uploaded
     return
 
 
@@ -113,12 +114,11 @@ def download_and_filter(url):
     file_name = url[55:-4] + '.csv'
         #The first 50 characters are the base url, the last 4 are .zip
     
-    #Apply the filter function to the file, and save it to the output file
+    #Apply the filter function to the file
     filter_file(data_zip_file.open(file_name), filters=filters)
-        #TBD: Allow the script to write to a csv file in GitHub
 
 
-#Running the code:
+### Running the code ###:
 if __name__ == "__main__":
         
     ### Download and Filter in Parallel ###
