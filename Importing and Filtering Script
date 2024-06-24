@@ -1,15 +1,20 @@
-## Last updated by Diran on 5/28/24
+## Last updated by Diran on 6/24/24
 
+# Packages for Handling Data
 import pandas as pd
+import matplotlib.path as path
+import numpy as np
 
-#Packages for interfacing with internet
+# Packages for interfacing with internet
 from io import BytesIO
 from zipfile import ZipFile
 from urllib.request import urlopen
 
-#Packages for parallel processing
+# Packages for parallel processing
 import concurrent.futures
 
+# Package for timing - TEMPORARY
+import time
 
 ### Creating All URLs ###
 
@@ -33,7 +38,7 @@ September = ['_09_' + i for i in days[:30]]
 October = ['_10_' + i for i in days]
 November = ['_11_' + i for i in days[:30]]
 December = ['_12_' + i for i in days]
-    #The underlines are to make the date fit into the final url
+    # The underlines are to make the date fit into the final url
     
 months = [January, February, March, April, May, June, July, August, September, November, December]
 
@@ -57,27 +62,26 @@ URLs.append('https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2020/AIS_2020_02_
 # Information on what AIS information means:
     #https://documentation.spire.com/ais-fundamentals/different-classes-of-ais/ais-channel-access-methods/
 
-#Read filters from the excel Sheet "Filters_by_Bridge" in this GitHub Repository    
-excel_filters = pd.read_excel("https://raw.githubusercontent.com/DiranOrange/Key-Bridge-Code-and-Data/main/Filters_by_Bridge.xlsx", header = 0, index_col=0)
+# Read filters from the excel Sheet "Port_Boundaries" in this GitHub Repository    
+port_data = pd.read_excel("https://raw.githubusercontent.com/DiranOrange/Key-Bridge-Code-and-Data/main/Port_Boundaries.xlsx", header = 0, index_col=0)
 
-dict_filters = excel_filters.transpose().to_dict('list')
+dict_ports = port_data.transpose().to_dict('list')
 
-#The query function asks for a string which denotes the conditions that each columns must satisfy for a row to be accepted
-filters = {bridge:
-    str(dict_filters[bridge][0]) + ' < LAT < ' + str(dict_filters[bridge][1]) + ' and ' + 
-    str(dict_filters[bridge][2]) + ' < LON < ' + str(dict_filters[bridge][3])
-    for bridge in dict_filters
-    }
+# Each port boundary is defined as a path of four vertices based on real world lat/lon data
+port_boxes = {port: path.Path(np.array(dict_ports[port]).reshape(4, 2)) for port in dict_ports}
 
-
-def filter_file(file, filters):
+def filter_file(file, boundaries):
     """
     Parameters
     ----------
     file : path to the file the be filtered
         Zipfiles from the internet will be opened, and the path will be listed here
     
-    filters : Filters to sort data, see variable assignmnet outside this function.
+    boundaries : Dictionary of the form Location: Foo: Path Defining Foo's Boundaries
+        For our purposes, Foo will likely be a port or bridge that we expect to see high traffic
+        A boundary is a closed path
+        The Path can consist of any number of pairs of lat/lon coordinates that serve as points / vertices
+            A path object comes from matplotlib.path, which has useful tools (specifically, determining if a point is within a closed path)
     
     Returns
     -------
@@ -88,15 +92,30 @@ def filter_file(file, filters):
     #Each file is prepared as a data frame
     raw_data = pd.read_csv(file, sep=',', header = 0)
      
-    #Apply each filter via the query function
-    for bridge in filters:
-        filtered_data = raw_data.query(filters[bridge])
+    # Filter data based on each port of interest
+    for port in boundaries:
         
-        #Put the data for each bridge into its own csv file
-        filtered_data.to_csv(('D:\Marine Data' + '\\' + bridge + ' Data.csv'), mode = 'a')
-            #WARNING: This filepath is temporary due to it being local, and will cause issues if not changed after downloading
-            #TDL: Allow the script to write to a non-local data hosting website, likely this GitHub Repository
-                #Note: may be difficult due to the size of the data being handled / uploaded
+        # The below checks are visually complicated, but are simple in nature: 
+            # Does the row have a boat big enough for us to care?
+            # Does the row have a point with a port boundary?
+        
+        # .loc requires the use of "&" instead of "and" and "|" instead of "or"
+            # Pay close attention to parenthesis and order of operations
+        
+        filtered_data = raw_data.loc[(((70 <= raw_data["VesselType"]) & (raw_data["VesselType"] < 90)) | (raw_data["VesselType"] == (1016 | 1017 | 1024 | 61)))
+            # Vessel types 70-90 & 1016, 1017, 1024 consist of tankers and cargo ships. 61 is for cruise ships
+                                     &
+        (boundaries[port].contains_points(np.array([raw_data["LON"], raw_data["LAT"]]).transpose()))
+            # This checks whether a ship is within a port boundary at the time of its AIS broadcast
+                                     &
+        (raw_data["SOG"] > 0.3)]
+            # This checks whether the boat is moving or stationary
+                # By trial and error, boats drifting in harbor don't seem to move faster than 0.3 knots                   
+        
+        # Put the data for each bridge into its own csv file
+        filtered_data.to_csv(('D:\Marine Data' + '\\' + port + ' Data.csv'), mode = 'a')
+            # WARNING: This filepath is temporary due to it being local, and will cause issues if not changed after downloading
+            # TDL: Replace the local address with rockfish storage
     return
 
 
@@ -115,12 +134,14 @@ def download_and_filter(url):
         #The first 50 characters are the base url, the last 4 are .zip
     
     #Apply the filter function to the file
-    filter_file(data_zip_file.open(file_name), filters=filters)
-
+    filter_file(data_zip_file.open(file_name), boundaries=port_boxes)
 
 ### Running the code ###:
 if __name__ == "__main__":
+    
+    # This process is IO bound due to the heavy network requirements (downloading thousands of datasets off the internet)
+        # A simple way to spped up the code is using threads, as done below
         
-    ### Download and Filter in Parallel ###
     with concurrent.futures.ThreadPoolExecutor() as executor : 
         executor.map(download_and_filter, URLs)
+        
