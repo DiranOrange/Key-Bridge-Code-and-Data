@@ -50,7 +50,8 @@ base_url = 'https://coast.noaa.gov/htdata/CMSP/AISDataHandler/'
 
 # Combine the date numbers with the general url format to get all URL's:
 
-URLs = [base_url + str(Year) + '/AIS_' + str(Year) + Date + '.zip' for Date in date_nums for Year in range(2015, 2024)]
+URLs = [base_url + str(Year) + '/AIS_' + str(Year) + Date + '.zip' for Date in date_nums for Year in range(2018, 2024)]
+    # Our port data is only from 2018 onwards, hence we don't consider 2015-2017
 
 # Can't forget about leap years!
 URLs.append('https://coast.noaa.gov/htdata/CMSP/AISDataHandler/2016/AIS_2016_02_29.zip')
@@ -68,7 +69,7 @@ port_data = pd.read_excel("https://raw.githubusercontent.com/DiranOrange/Key-Bri
 dict_ports = port_data.transpose().to_dict('list')
 
 # Each port boundary is defined as a path of four vertices based on real world lat/lon data
-port_boxes = {port: path.Path(np.array(dict_ports[port]).reshape(4, 2)) for port in dict_ports}
+port_boxes = {port: path.Path(np.array(dict_ports[port]).reshape(5, 2)) for port in dict_ports}
 
 def filter_file(file, boundaries):
     """
@@ -140,7 +141,7 @@ def download_and_filter(url):
 if __name__ == "__main__":
     
     # This process is IO bound due to the heavy network requirements (downloading thousands of datasets off the internet)
-        # A simple way to spped up the code is using threads, as done below
+    # Thus threading is chosen to speed up the process
         
     with concurrent.futures.ThreadPoolExecutor() as executor : 
         executor.map(download_and_filter, URLs)
