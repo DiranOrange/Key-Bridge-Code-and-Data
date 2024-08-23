@@ -34,7 +34,7 @@ for filename in os.listdir(folder_path):
             # See the length of URLs in Advanced AIS Filtering
             
         # Save the data
-        bridge_results[filename] = daily_trips
+        bridge_results[filename] = [daily_trips, num_trips]
 
 
 # Takes the "csv" and "Data" out of the filename so it can be used as a bridge name
@@ -42,16 +42,16 @@ bridge_results = {name.replace('.csv', '').replace(' Data', ''): value for name,
 
 
 # Sort results from largest to smallest
-filtered_Bridge_results = dict(sorted(bridge_results.items(), key=lambda item: item[1], reverse=True))
+filtered_Bridge_results = dict(sorted(bridge_results.items(), key=lambda item: item[1][0], reverse=True))
 
 # Store all the sorted results into a dataframe
-Bridge_results_df = pd.DataFrame([{"Bridge": i, "Daily Trips": j}  for i, j in filtered_Bridge_results.items()])
+Bridge_results_df = pd.DataFrame([{"Bridge": i, "Daily Trips": j[0], "Total Trips": j[1]}  for i, j in filtered_Bridge_results.items()])
 
 # Saves the results to a csv 
-Bridge_results_df.to_csv('D:\\Marine Data\\Bridge Plots\\Filtered_bridge_data_All.csv', index=False)
+Bridge_results_df.to_csv('D:\\Marine Data\\Bridge Plots\\Trip Data All Large Ships.csv', index=False)
 
 # Focus on bridges that have more than 1 trip per day on average
-filtered_results = {k: v for k, v in filtered_Bridge_results.items() if v >= 1}
+filtered_results = {k: v[0] for k, v in filtered_Bridge_results.items() if v[0] >= 1}
 bridges_with_traffic = [(i, j) for i, j in filtered_results.items()]
 
 
@@ -145,7 +145,7 @@ def process_data_for_threshold(threshold):
             num_trips = ((df_filtered.shape[0])/2)
             daily_trips = num_trips / (2282)
             
-            bridge_results[filename] = daily_trips
+            bridge_results[filename] = [daily_trips, num_trips]
     
     # Clean up bridge names
     bridge_results = {name.replace('.csv', '').replace(' Data', ''): value for name, value in bridge_results.items()}
@@ -159,13 +159,13 @@ for threshold, color in zip(length_thresholds, colors):
     filtered_Bridge_results = dict(sorted(all_bridge_results[threshold].items(), key=lambda item: item[1], reverse=True))
     
     # Create DataFrame from results
-    Bridge_results_df = pd.DataFrame([{"Bridge": i, "Daily Trips": j}  for i, j in filtered_Bridge_results.items()])
+    Bridge_results_df = pd.DataFrame([{"Bridge": i, "Daily Trips": j[0], "Total Trips": j[1]}  for i, j in filtered_Bridge_results.items()])
     
     # Optionally save to CSV
-    Bridge_results_df.to_csv(f'D:\\Marine Data\\Bridge Plots\\Filtered_bridge_data_{threshold}.csv', index=False)
+    Bridge_results_df.to_csv(f'D:\\Marine Data\\Bridge Plots\\Trip Data for Ships Longer than {threshold} m.csv', index=False)
     
     # Filter on bridges with traffic above 0.1 trips per day, on average
-    filtered_results = {k: v for k, v in filtered_Bridge_results.items() if v >= 0.1}
+    filtered_results = {k: v[0] for k, v in filtered_Bridge_results.items() if v[0] >= 0.1}
         # With larger ship sizes, traffic significantly decreases
     
     traffic = [(i, j) for i, j in filtered_results.items()]
