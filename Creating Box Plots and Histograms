@@ -1,0 +1,121 @@
+## Written by Diran Jimenez
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.backends.backend_pdf import PdfPages
+
+
+# Get the list of bridges from our GitHub
+bridge_data = pd.read_excel("https://raw.githubusercontent.com/DiranOrange/Key-Bridge-Code-and-Data/main/Corrected_Bridge_Boundaries.xlsx", header=0, index_col = 0, usecols=["STRUCTURE_NAME", "START_X", "START_Y","END_X", "END_Y"], converters={"START_X":float, "START_Y":float, "END_X": float, "END_Y":float})
+dict_bridges = bridge_data.transpose().to_dict('list')
+bridge_lines = {bridge: np.array(dict_bridges[bridge]).reshape(2,2) for bridge in dict_bridges}
+
+# This file path should link to the data on your machine
+folder_path = r"D:\Marine Data\New Bridge Data\\"
+
+# The plots in this script are done based on annual data
+years = [i for i in range(2018, 2024)]
+
+# They are also split by different ship sizes, based on group discussion
+lengths = [150, 180, 215, 250, 275, 300]
+    # Units = meters
+
+# These are the important bridges. If you'd like to quickly create figures for these bridges, loop through this list instead of all bridges
+important_bridges = ["SUNSHINE SKYWAY BRIDGE", "CHESAPEAKE BAY BRIDGE", "FRANCIS SCOTT KEY BRIDGE", "VERZZANO NARROWS BRIDGE"]
+
+
+### Making Box Plots ###
+for bridge in bridge_lines.keys():
+# for bridge in important_bridges:
+    
+    # Adjust the destiation of the PDF based on your machine
+    with PdfPages(f"D:\\Marine Data\\Bridge Plots\\Box Plots\\Box plot for {bridge}.pdf") as pdf: 
+        # Read the data from your machine
+        data = pd.read_csv(folder_path + bridge + " Data.csv", usecols=["BaseDateTime", "Length", "VesselType"])
+        
+        # Remove rows with the header
+        filtered = data[data["VesselType"] != 'VesselType']
+        
+        # Put the columns back in
+        filtered.columns = ["BaseDateTime", 'VesselType', 'Length']
+        
+        # If there was no data for a bridge, skip making a plot
+        if filtered.empty:
+            continue
+        
+        # Blank values are turned into NaN values by NumPy
+        good = filtered.astype({"VesselType":np.float32, "Length":np.float32})
+        
+        data = {'Count':[], "Length":[]}
+        counts = {i:[] for i in lengths}
+        counts["300 m and above"] = []
+        
+        for y in years:
+            # Pull all the entries from one year
+            yearly_boats = good.loc[good["BaseDateTime"].apply(lambda x: x[:4]) == str(y)]["Length"][::2]
+                # Since the data contains two points for each time a boat passes under a bridge, only read every other entry
+            
+            # Create a count for each size
+            for i in range(len(lengths)-1):
+                count = sum(np.where( (yearly_boats >= lengths[i]) & (yearly_boats <= lengths[i+1]), 1, 0))
+                data["Length"].append(lengths[i])
+                data["Count"].append(count)
+                
+            # Create a count for boats larger than the largest size    
+            out_count = sum(np.where( yearly_boats >= lengths[-1], 1, 0))
+            data["Length"].append("300 m and above")
+            data["Count"].append(out_count)
+        
+        plottable = pd.DataFrame(data)
+        
+        # Make labels readable by tilting them
+        plt.xticks(rotation=30)
+        
+        # Make the box plot with whiskers for the min and max value
+        sns.boxplot(plottable, x = "Length", y="Count", whis=(0,100))
+        
+        plt.title(f"{bridge}")
+        plt.tight_layout()
+        pdf.savefig()
+        plt.close()
+
+
+# Give each year a different color
+colors = ["red", "orange", "yellow", "green", "blue", "purple"]
+
+# for bridge in important_bridges:
+for bridge in bridge_lines.keys():
+    # Adjust the filepath of the pdf based on your machine
+    with PdfPages(f"D:\\Marine Data\\Bridge Plots\\Histograms\\Histogram of Lengths for {bridge}.pdf") as pdf:
+        data = pd.read_csv(folder_path + bridge + " Data.csv", usecols=["BaseDateTime", "Length", "VesselType"])
+        
+        # Remove header rows, then add the columns back
+        filtered = data[data["VesselType"] != 'VesselType']
+        filtered.columns = ["BaseDateTime", 'VesselType', 'Length']
+        
+        # Ignore bridges with no data
+        if filtered.empty:
+            continue
+        
+        # Convert blank values to NaN values via NumPy
+        good = filtered.astype({"VesselType":np.float32, "Length":np.float32})
+        
+        for y, c in zip(years, colors): 
+            # Read every other data point from the year
+            yearly_data = good.loc[good["BaseDateTime"].apply(lambda x: x[:4]) == str(y)]["Length"][::2]
+             
+            # Create a histogram of the data, with bins equal to the lengths defined above
+            plt.hist(yearly_data, bins = lengths, fc = (1,1,1,0), ls="solid", lw=1, ec=c, label=y)
+                # The face color is completely transparent, allowing each year to overlap each other
+        
+        plt.title(f"{bridge} Histogram")
+        plt.xlabel("Length (m)")
+        plt.ylabel("Count (Annual)")
+        plt.xticks(lengths)
+        plt.tight_layout() 
+        plt.legend()
+        pdf.savefig()
+        plt.close()
+        
