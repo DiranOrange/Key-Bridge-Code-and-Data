@@ -1,0 +1,201 @@
+## Written by Natalia Dougan
+## Edited by Diran Jimenez
+
+import pandas as pd 
+import numpy as np 
+import matplotlib.pyplot as plt
+import os
+from matplotlib.backends.backend_pdf import PdfPages
+
+# This file path should link to the data on your machine
+folder_path = r"D:\Marine Data\New Bridge Data"
+
+# Dictionary to store average ships per day for each bridge with no size requirement
+bridge_results = {}
+
+# Process each CSV file in the folder
+for filename in os.listdir(folder_path):
+    if filename.endswith(".csv"):
+        file_path = os.path.join(folder_path, filename)
+        
+        df = pd.read_csv(file_path, header=None)
+
+        # Drops all the rows with headers and re-adds just one row of headers to the columns
+        df_no_header = df[df[0] != 'MMSI']
+        df_no_header.columns = ['MMSI', 'BaseDateTime', 'LAT', 'LON', 'SOG', 'COG', 'Heading', 'VesselName', 'IMO', 'CallSign', 'VesselType', 'Status', 'Length', 'Width', 'Draft', 'Cargo', 'TransceiverClass']
+        
+        df_no_header = df_no_header.copy()
+        
+        # Since each trip has two rows of data, take the length of the df and divide by 2
+        num_trips = ((df_no_header.shape[0])/2)
+        
+        # Find the average daily trips
+        daily_trips = num_trips / (2282) # This is the number of days of data that have been processed
+            # See the length of URLs in Advanced AIS Filtering
+            
+        # Save the data
+        bridge_results[filename] = daily_trips
+
+
+# Takes the "csv" and "Data" out of the filename so it can be used as a bridge name
+bridge_results = {name.replace('.csv', '').replace(' Data', ''): value for name, value in bridge_results.items()}
+
+
+# Sort results from largest to smallest
+filtered_Bridge_results = dict(sorted(bridge_results.items(), key=lambda item: item[1], reverse=True))
+
+# Store all the sorted results into a dataframe
+Bridge_results_df = pd.DataFrame([{"Bridge": i, "Daily Trips": j}  for i, j in filtered_Bridge_results.items()])
+
+# Saves the results to a csv 
+Bridge_results_df.to_csv('D:\\Marine Data\\Bridge Plots\\Filtered_bridge_data_All.csv', index=False)
+
+# Focus on bridges that have more than 1 trip per day on average
+filtered_results = {k: v for k, v in filtered_Bridge_results.items() if v >= 1}
+bridges_with_traffic = [(i, j) for i, j in filtered_results.items()]
+
+
+# These bridges are of particular note based on group discussion and will be highlighted
+important_bridges = ["SUNSHINE SKYWAY BRIDGE", "CHESAPEAKE BAY BRIDGE", "FRANCIS SCOTT KEY BRIDGE", "VERZZANO NARROWS BRIDGE"]
+    # If more bridges become relavent, add them to this list and remake the graphs
+
+
+# Save all figures into one pdf, adjust this filepath to your machine
+with PdfPages('D:\\Marine Data\\Bridge Plots\\Rankings\\Bridge Rankings for All Large Ships.pdf') as pdf: 
+    # Adjust the filepath to your machine
+    
+    
+    # Make unimportant bridges skyblue, and important ones bright blue
+    Color_map = {b[0]:"skyblue" for b in bridges_with_traffic}
+    
+    for b in important_bridges:
+        Color_map[b] = "blue"
+    
+    
+    # Make a figure for the top 10, 25, and 50 bridges
+    for n in [10, 25, 50]:
+        plt.figure(figsize=(20, 8))
+        
+        # Ensure each bridge name is readable by tilting them
+        plt.xticks(rotation=45, ha='right', fontsize=10)
+        
+        plt.xlabel('Bridge Names')
+        plt.ylabel('Average Trips per Day')
+        plt.title(f'Top {n} Bridges with Daily Trip Averages Above 1 Ships/Day (All Large Ships)')
+        
+        # Make a bar plot with the exact traffic labeled at the top of each bar
+        for b in bridges_with_traffic[:n]:
+            plt.bar(b[0], b[1], color=Color_map[b[0]])
+            plt.text(b[0], b[1], f'{b[1]:.2f}', ha='center', va='bottom', fontsize="x-small")
+            
+        plt.tight_layout()  
+        pdf.savefig()
+        plt.close()  
+        
+        # If you need a written list of the rankings, uncomment this section
+        # if n == 50:
+        #     i = 0
+        #     print()
+        #     print("Ranking with All Large Ships")
+        #     for b in bridges_with_traffic[:50]:
+        #         i += 1
+        #         print(f"{i}: {b[0]} - {b[1]:.4f} Average Daily Trips")
+        
+print("Bridge_Averages_All_Bridges.pdf saved")
+
+
+# These lengths have been arbitrarily chosen as cutoffs for different sizes of ship
+length_thresholds = [180, 215, 250, 275, 300]
+
+# Each size gets its own color scheme
+colors = ['lightgreen', 'khaki', 'lightsalmon', 'lightcoral', 'plum']
+highlights = ["green", "gold", "darkorange", "red", "purple"]
+
+# Unimportant bridges get the regular color, important ones get the highlight color
+color_map = {length_thresholds[i]:{b:colors[i] for b in filtered_Bridge_results.keys()} for i in range(len(colors))}
+for i in range(len(colors)):
+    for b in important_bridges:
+        color_map[length_thresholds[i]][b] = highlights[i]
+        
+        
+
+# Saving the data into a dictionary of dictionaries
+all_bridge_results = {threshold: {} for threshold in length_thresholds}
+
+def process_data_for_threshold(threshold):
+    bridge_results = {}
+    
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".csv"):
+            file_path = os.path.join(folder_path, filename)
+            
+            df = pd.read_csv(file_path, header=None)
+            
+            
+            df_no_header = df[df[0] != 'MMSI']
+            df_no_header.columns = ['MMSI', 'BaseDateTime', 'LAT', 'LON', 'SOG', 'COG', 'Heading', 'VesselName', 'IMO', 'CallSign', 'VesselType', 'Status', 'Length', 'Width', 'Draft', 'Cargo', 'TransceiverClass']
+            
+            df_no_header = df_no_header.copy()
+            
+            
+            df_filtered = df_no_header[df_no_header['Length'].astype(float) > threshold]
+            
+            df_filtered = df_filtered.copy()
+            
+            num_trips = ((df_filtered.shape[0])/2)
+            daily_trips = num_trips / (2282)
+            
+            bridge_results[filename] = daily_trips
+    
+    # Clean up bridge names
+    bridge_results = {name.replace('.csv', '').replace(' Data', ''): value for name, value in bridge_results.items()}
+    
+    return bridge_results
+
+for threshold, color in zip(length_thresholds, colors):
+    # add data dictionary for threshold to i index of dictionary
+    all_bridge_results[threshold] = process_data_for_threshold(threshold)
+    
+    filtered_Bridge_results = dict(sorted(all_bridge_results[threshold].items(), key=lambda item: item[1], reverse=True))
+    
+    # Create DataFrame from results
+    Bridge_results_df = pd.DataFrame([{"Bridge": i, "Daily Trips": j}  for i, j in filtered_Bridge_results.items()])
+    
+    # Optionally save to CSV
+    Bridge_results_df.to_csv(f'D:\\Marine Data\\Bridge Plots\\Filtered_bridge_data_{threshold}.csv', index=False)
+    
+    # Filter on bridges with traffic above 0.1 trips per day, on average
+    filtered_results = {k: v for k, v in filtered_Bridge_results.items() if v >= 0.1}
+        # With larger ship sizes, traffic significantly decreases
+    
+    traffic = [(i, j) for i, j in filtered_results.items()]
+    
+    
+    with PdfPages(f"D:\\Marine Data\\Bridge Plots\\Rankings\\Bridge Rankings for Ships above {threshold} m.pdf") as pdf: 
+        for n in [10, 25, 50]:
+            
+            plt.figure(figsize=(20, 8))
+            
+            plt.xticks(rotation=45, ha='right', fontsize=10)
+            
+            plt.xlabel('Bridge Names')
+            plt.ylabel('Average Trips per Day')
+            plt.title(f'Top {min(n, len(traffic))} Bridges with Daily Trip Averages Above 0.1 Ships/Day for Ships above {threshold} m')
+                
+            for b in traffic[:n]:
+                plt.bar(b[0], b[1], color=color_map[threshold][b[0]])
+                plt.text(b[0], b[1], f"{b[1]:.2f}", ha='center', va='bottom', fontsize="small")
+                
+            plt.tight_layout()  
+            pdf.savefig()
+            plt.close()  
+            
+            # if n == 50:
+            #     i = 0
+            #     print()
+            #     print(f"Ranking with Ships Larger than {threshold} m:")
+            #     for b in traffic[:50]:
+            #         i += 1
+            #         print(f"{i}. {b[0]} - {b[1]:.4f} Average Daily Trips")
+                    
+    print(f"Bridge_Averages_Ship_size_{threshold}.pdf saved")
